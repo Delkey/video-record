@@ -62,22 +62,16 @@
                     const constraints = {
                         audio,
                         video,
-                        facingMode: { exact: facingMode },
+                        facingMode,
                     };
 
                     try {
                         items.stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    } catch (e) {
-                        console.log(e.message);
-                        alert(resolutionType + " 화질의 전면 카메라만 촬영 가능 합니다.");
-                        return false;
-                    }
 
-                    items.record_video.srcObject = items.stream;
-                    items.audioTrack = items.stream.getAudioTracks()[0];
-                    items.videoTrack = items.stream.getVideoTracks()[0];
+                        items.record_video.srcObject = items.stream;
+                        items.audioTrack = items.stream.getAudioTracks()[0];
+                        items.videoTrack = items.stream.getVideoTracks()[0];
 
-                    try {
                         items.media = new MediaRecorder(items.stream, { mimeType });
 
                         items.media.ondataavailable = (e) => {
@@ -92,11 +86,24 @@
                             stop();
                         };
 
-                        alert("미디어 레코드 생성 성공 (mimeType: " + mimeType + ")");
+                        console.log("미디어 레코드 생성 성공 (mimeType: " + mimeType + ")");
+                        alert(
+                            "카메라를 활성화 했습니다.\n\n전면 카메라가 동작하지 않을 경우\n" +
+                                resolutionType +
+                                " 화질을 지원하지 않는 카메라 입니다."
+                        );
                         items.video_container.style.display = "block";
                     } catch (e) {
-                        console.log(e.message);
-                        alert("카메라 준비 중 오류가 발생했습니다.");
+                        const { message } = e;
+                        console.log(message);
+                        if (message === "Constraints could be not satisfied.") {
+                            alert(resolutionType + " 화질의 카메라만 촬영 가능 합니다.");
+                        } else if (message === "The request is not allowed by the user agent or the platform in the current context.") {
+                            alert("카메라 권한이 허용되지 않았습니다.\n\n카메라 권한을 허용 후 진행해 주세요.");
+                        } else {
+                            alert("카메라 설정 중 오류가 발생했습니다.");
+                        }
+                        return false;
                     }
                 } else {
                     alert("카메라를 지원하지 않는 브라우저 이거나 연결 상태가 정상적이지 않습니다.\n\n촬영 가능한 기기에서 다시 시도해 주세요.");
@@ -181,6 +188,6 @@
                 },
             };
         })();
-        recorder.init({ resolutionType: "FHD", audio: true, facingMode: "user" });
+        recorder.init({ resolutionType: "FHD", audio: false, facingMode: "user" });
     </script>
 </html>
