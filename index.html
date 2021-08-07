@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Video Record</title>
+    </head>
+    <body>
+        <div id="video-container" style="display: none">
+            <video id="record-video" style="width: 100%" autoplay playsinline></video>
+            <video id="preview-video" style="width: 100%; display: none" controls></video>
+            <div>
+                <button type="button" onclick="recorder.start();">시작</button>
+                <button type="button" onclick="recorder.stop();">중지</button>
+            </div>
+        </div>
+    </body>
+    <script>
+        const recorder = (function () {
+            const resolutions = {
+                HD: {
+                    width: { min: 1280, ideal: 1280, max: 1280 },
+                    height: { min: 720, ideal: 720, max: 720 },
+                    frameRate: 30,
+                },
+                FHD: {
+                    width: { min: 1920, ideal: 1920, max: 1920 },
+                    height: { min: 1080, ideal: 1080, max: 1080 },
+                    frameRate: 30,
+                },
+                EMPTY: true,
+            };
+
+            const items = {
+                stream: null,
+                media: null,
+                audioTrack: null,
+                videoTrack: null,
+                blobs: [],
+                video_container: null,
+                record_video: null,
+                preview_video: null,
+            };
+
+            async function init({ resolutionType, audio, facingMode }) {
+                const isPossible = possibleRecordVideo();
+                if (isPossible) {
+                    const mimeType = getUserMediaMimeType();
+
+                    if (!mimeType) {
+                        alert("비디오 코덱이 지원되지 않습니다.");
+                        return false;
+                    }
+
+                    items.video_container = document.querySelector("#video-container");
+                    items.record_video = document.querySelector("#record-video");
+                    items.preview_video = document.querySelector("#preview-video");
+
+                    const deviceOS = getDeviceOS();
+                    const video = resolutions[resolutionType ? resolutionType : "EMPTY"];
+                    const constraints = {
+                        audio,
+                        video,
+                        facingMode: { exact: facingMode },
+                    };
+
+                    try {
+                        items.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    } catch (e) {
+                        console.log(e.message);
+                        alert(resolutionType + " 화질의 전면 카메라만 촬영 가능 합니다.");
+                        return false;
+                    }
+
+                    items.record_video.srcObject = items.stream;
+                    items.audioTrack = items.stream.getAudioTracks()[0];
+                    items.videoTrack = items.stream.getVideoTracks()[0];
+
+                    try {
+                        items.media = new MediaRecorder(items.stream, { mimeType });
+
+                        items.media.ondataavailable = (e) => {
+                            const { data } = e;
+                            if (data && data.size > 0) {
+                                console.log("push");
+                                items.blobs.push(data);
+                            }
+                        };
+
+                        items.media.onstop = (e) => {
+                            stop();
+                        };
+
+                        alert("미디어 레코드 생성 성공 (mimeType: " + mimeType + ")");
+                        items.video_container.style.display = "block";
+                    } catch (e) {
+                        console.log(e.message);
+                        alert("카메라 준비 중 오류가 발생했습니다.");
+                    }
+                } else {
+                    alert("카메라를 지원하지 않는 브라우저 이거나 연결 상태가 정상적이지 않습니다.\n\n촬영 가능한 기기에서 다시 시도해 주세요.");
+                }
+            }
+
+            function possibleRecordVideo() {
+                return (
+                    navigator.mediaDevices.getUserMedia ||
+                    navigator.mediaDevices.webkitGetUserMedia ||
+                    navigator.mediaDevices.mozGetUserMedia ||
+                    navigator.mediaDevices.msGetUserMedia
+                );
+            }
+
+            function getDeviceOS() {
+                const agent = navigator.userAgent;
+                const agentLowerCase = navigator.userAgent.toLowerCase();
+                const mac = ["iPhone", "iPad", "Mac"];
+                const etc = ["Android", "BlackBerry", "Symbian", "Ubuntu", "PDA"];
+
+                if (/win/.test(agentLowerCase)) {
+                    return "Windows";
+                } else if (/x11/.test(agentLowerCase)) {
+                    return "Unix";
+                } else if (/mac/.test(agentLowerCase)) {
+                    return mac.find((item) => agent.includes(item));
+                } else if (/linux/.test(agentLowerCase)) {
+                    return etc.find((item) => agent.includes(item));
+                } else {
+                    return "Unknown";
+                }
+            }
+
+            function getUserMediaMimeType() {
+                const videoMimeTypes = ["video/webm", "video/ogg", "video/x-msvideo", "video/mp4", "video/mpeg", "video/3gpp", "video/3gpp2"];
+                const webmTypes = ["video/webm\;codecs=vp8", "video/webm\;codecs=daala", "video/webm\;codecs=h264"];
+                const audioMimeTypes = ["audio/webm", "audio/webm\;codecs=opus", "audio/ogg"];
+
+                const mimeType = videoMimeTypes.find((videoMimeType) => MediaRecorder.isTypeSupported(videoMimeType));
+
+                if (typeof mimeType === "undefined" || mimeType === null || mimeType === "") {
+                    return false;
+                } else if (mimeType === "video/webm") {
+                    // return webmTypes.find((webmType) => MediaRecorder.isTypeSupported(webmType));
+                }
+
+                return mimeType;
+            }
+
+            function start() {
+                console.log("start");
+                items.preview_video.style.display = "none";
+                items.record_video.style.display = "block";
+                items.blobs = [];
+                items.media.start(15);
+            }
+
+            function stop() {
+                console.log("stop");
+                items.media.stop();
+                play();
+            }
+
+            function play() {
+                console.log("play");
+                const blob = new Blob(items.blobs, { type: "video/mp4" });
+                items.preview_video.setAttribute("src", URL.createObjectURL(blob));
+                items.record_video.style.display = "none";
+                items.preview_video.style.display = "block";
+            }
+
+            return {
+                init: ({ resolutionType, audio, facingMode }) => {
+                    init({ resolutionType, audio, facingMode });
+                },
+                start: () => {
+                    start();
+                },
+                stop: () => {
+                    stop();
+                },
+            };
+        })();
+        recorder.init({ resolutionType: "FHD", audio: true, facingMode: "user" });
+    </script>
+</html>
